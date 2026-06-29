@@ -104,6 +104,14 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .mode-tabs{display:flex; gap:8px; margin-bottom:22px; background:rgba(0,0,0,.2); border-radius:12px; padding:5px;}
 .mode-tab{flex:1; padding:10px; border-radius:9px; background:transparent; color:var(--cream-dim); font-size:14px;}
 .mode-tab.active{background:var(--brass); color:#2B1F04;}
+.mode-select{width:100%; max-width:420px;}
+.mode-select .mode-tabs{margin-bottom:6px;}
+.mode-tab.locked{opacity:.35; cursor:not-allowed;}
+.mode-tab.readonly{cursor:default;}
+.team-tag{font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:3px 8px; border-radius:999px;}
+.team-tag.team-a{background:rgba(127,179,168,.22); color:#A9D8CB;}
+.team-tag.team-b{background:rgba(201,123,90,.22); color:#E7A98A;}
+.partner-line{font-family:var(--font-body); font-size:13px; color:var(--cream-dim); text-align:center;}
 
 .field-group{display:flex; flex-direction:column; gap:8px; margin-bottom:16px; text-align:left;}
 .field-label{font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--brass-light);}
@@ -170,14 +178,17 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .board-wrap{
   flex:1; background: radial-gradient(ellipse at 50% 30%, var(--felt-light) 0%, var(--felt) 60%);
   border-radius:16px; border:1px solid rgba(0,0,0,.3); box-shadow: inset 0 0 50px rgba(0,0,0,.35);
-  display:flex; align-items:center; overflow-x:auto; padding:20px 16px; min-height:180px; position:relative;
+  overflow:auto; padding:20px 16px; min-height:220px; max-height:480px; position:relative;
 }
-.board-row{display:flex; align-items:center; gap:0; margin:0 auto;}
-.empty-board-msg{margin:auto; text-align:center; color:rgba(244,239,230,.55); font-family:var(--font-body); font-size:14px;}
+.table-canvas{ position:relative; margin:0 auto; }
+.empty-board-msg{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  text-align:center; color:rgba(244,239,230,.55); font-family:var(--font-body); font-size:14px; width:80%;
+}
 .end-zone{
-  flex-shrink:0; width:70px; height:90px; border-radius:10px; border:2px dashed rgba(230,199,90,.6);
-  display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:11px; text-align:center;
-  color:var(--brass-light); background: rgba(230,199,90,.1); cursor:pointer; animation: pulseZone 1.4s ease-in-out infinite; margin:0 8px;
+  position:absolute; border-radius:10px; border:2px dashed rgba(230,199,90,.6);
+  display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:22px; font-weight:700;
+  color:var(--brass-light); background: rgba(230,199,90,.1); cursor:pointer; animation: pulseZone 1.4s ease-in-out infinite;
 }
 .end-zone:hover{background: rgba(230,199,90,.2);}
 @keyframes pulseZone{ 0%,100%{box-shadow:0 0 0 0 rgba(230,199,90,.35);} 50%{box-shadow:0 0 0 6px rgba(230,199,90,0);} }
@@ -195,12 +206,20 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .tile-h .tile-div{width:3px; height:82%; align-self:center; background:rgba(0,0,0,.28); border-radius:2px;}
 .tile-v .tile-div{height:3px; width:82%; align-self:center; background:rgba(0,0,0,.28); border-radius:2px;}
 
-.domino-half{ display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:3px; padding:11%; }
+/* Board tiles are sized for the table canvas — same look, different footprint than hand tiles */
+.board-tile-h{ position:absolute; display:flex; flex-direction:row; width:120px; height:60px; }
+.board-tile-v{ position:absolute; display:flex; flex-direction:column; width:60px; height:120px; }
+.board-tile-h .domino-half{width:50%; height:100%;}
+.board-tile-v .domino-half{width:100%; height:50%;}
+.board-tile-h .tile-div{width:3px; height:82%; align-self:center; background:rgba(0,0,0,.28); border-radius:2px;}
+.board-tile-v .tile-div{height:3px; width:82%; align-self:center; background:rgba(0,0,0,.28); border-radius:2px;}
+
+.domino-half{ display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:3px; padding:5%; }
 .pip{border-radius:50%; opacity:0;}
 .pip.on{ opacity:1; background: var(--ink); box-shadow: inset 0 1.5px 1.5px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.15); }
 
-.board-row .tile{ margin:0 2px; transform: scale(0.95); animation: dropIn .35s ease; }
-@keyframes dropIn{ from{ transform: scale(0.5) translateY(-12px); opacity:0;} to{ transform: scale(0.95) translateY(0); opacity:1;} }
+.table-canvas .board-tile-h, .table-canvas .board-tile-v{ animation: dropIn .35s ease; }
+@keyframes dropIn{ from{ transform: scale(0.5) translateY(-12px); opacity:0;} to{ transform: scale(1) translateY(0); opacity:1;} }
 
 .hand-area{display:flex; flex-direction:column; gap:10px;}
 .hand-status{display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
@@ -296,6 +315,27 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
         </div>
       </div>
       <div class="lobby-players" id="lobbyPlayers"></div>
+
+      <div class="mode-select" id="modeSelect">
+        <div class="field-label" style="text-align:center; margin-bottom:8px;">Game Mode</div>
+        <div class="mode-tabs">
+          <button class="mode-tab" id="modeTabSingles">Singles — everyone for themselves</button>
+          <button class="mode-tab" id="modeTabPairs">Pairs (2v2)</button>
+        </div>
+        <div class="lobby-hint" id="modeHint"></div>
+      </div>
+
+      <div class="mode-select" id="scoreSelect">
+        <div class="field-label" style="text-align:center; margin-bottom:8px;">Match Length (points to win)</div>
+        <div class="mode-tabs" id="scoreTabs">
+          <button class="mode-tab" data-score="51">51</button>
+          <button class="mode-tab" data-score="101">101</button>
+          <button class="mode-tab" data-score="151">151</button>
+          <button class="mode-tab" data-score="201">201</button>
+        </div>
+        <div class="lobby-hint" id="scoreHint"></div>
+      </div>
+
       <div class="lobby-hint" id="lobbyHint"></div>
       <div style="display:flex; gap:12px;">
         <button class="btn-brass" id="startGameBtn">Start Game</button>
@@ -313,7 +353,7 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
       </div>
       <div class="turn-banner" id="turnBanner"></div>
       <div class="opponents-row" id="opponentsRow"></div>
-      <div class="board-wrap"><div class="board-row" id="boardRow"></div></div>
+      <div class="board-wrap" id="boardWrap"><div class="table-canvas" id="boardRow"></div></div>
       <div class="hand-area">
         <div class="hand-status">
           <div class="who" id="activePlayerLabel">Your tiles</div>
@@ -335,6 +375,26 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
         </table>
         <div class="roundend-actions" id="roundendActionsHost"></div>
         <div class="lobby-hint hidden" id="roundendWaitMsg">Waiting for the host to start the next round…</div>
+        <div style="margin-top:18px;">
+          <button class="btn-ghost btn-small" id="exitFromRoundEndBtn">Exit Match</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-matchend" class="hidden">
+      <div class="roundend-card">
+        <div class="eyebrow">Match Over</div>
+        <h2 id="matchendTitle">Player wins the match!</h2>
+        <div class="roundend-reason" id="matchendReason"></div>
+        <table class="score-table">
+          <thead><tr><th>Player</th><th class="num">Final score</th></tr></thead>
+          <tbody id="matchendBody"></tbody>
+        </table>
+        <div class="roundend-actions" id="matchendActionsHost"></div>
+        <div class="lobby-hint hidden" id="matchendWaitMsg">Waiting for the host…</div>
+        <div style="margin-top:18px;">
+          <button class="btn-brass btn-small" id="exitFromMatchEndBtn">Exit to Home</button>
+        </div>
       </div>
     </div>
 
@@ -360,7 +420,79 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   function pipGridHTML(n){ var on=PIP_MAP[n]; var h=""; for(var i=1;i<=9;i++) h+='<span class="pip'+(on.indexOf(i)>-1?' on':'')+'"></span>'; return h; }
   function tileInnerHTML(a,b){ return '<div class="domino-half">'+pipGridHTML(a)+'</div><div class="tile-div"></div><div class="domino-half">'+pipGridHTML(b)+'</div>'; }
   function makeTileEl(a,b,orientation){ var t=el("div","tile "+(orientation==="v"?"tile-v":"tile-h")); t.innerHTML=tileInnerHTML(a,b); return t; }
+  function makeBoardTileEl(a,b,orientation,left,top){
+    var t = el("div", orientation==="v" ? "board-tile-v" : "board-tile-h");
+    t.innerHTML = tileInnerHTML(a,b);
+    t.style.left = left + "px";
+    t.style.top = top + "px";
+    return t;
+  }
+
+  /**
+   * Lays the board chain out like a real domino table: tiles run horizontally
+   * until they'd run off the edge of the table, at which point that tile is
+   * drawn vertically instead and the chain continues in the opposite
+   * direction one row down — a classic "snake" layout.
+   */
+  function layoutBoardSnake(board, canvasWidth){
+    var margin = 70;
+    var rowGap = 154;      // clears the turn tile's height (120) + half a horizontal tile (30) + 4px gap
+    var tileLong = 124;    // horizontal tile footprint (including small gap)
+    var cursorX = margin;
+    var rowCenterY = 50;
+    var mode = "right";
+    var placements = [];
+
+    board.forEach(function(bt, i){
+      var willOverflow = (mode === "right")
+        ? (cursorX + 120 > canvasWidth - margin)
+        : (cursorX - 120 < margin);
+
+      if(willOverflow && i > 0){
+        if(mode === "right"){
+          placements.push({ bt: bt, orientation: "v", left: cursorX, top: rowCenterY, modeAtPlacement: mode });
+          cursorX += 60;
+        } else {
+          placements.push({ bt: bt, orientation: "v", left: cursorX - 60, top: rowCenterY, modeAtPlacement: mode });
+          cursorX -= 60;
+        }
+        rowCenterY += rowGap;
+        mode = (mode === "right") ? "left" : "right";
+      } else if(mode === "right"){
+        placements.push({ bt: bt, orientation: "h", left: cursorX, top: rowCenterY - 30, modeAtPlacement: mode });
+        cursorX += tileLong;
+      } else {
+        placements.push({ bt: bt, orientation: "h", left: cursorX - 120, top: rowCenterY - 30, modeAtPlacement: mode });
+        cursorX -= tileLong;
+      }
+    });
+
+    var first = placements[0];
+    var startAnchor = first ? { x: first.left, y: first.top + 30 } : { x: margin, y: 50 };
+
+    var endAnchor = { x: margin, y: 50 };
+    if(placements.length){
+      var last = placements[placements.length - 1];
+      if(last.orientation === "h"){
+        endAnchor = (last.modeAtPlacement === "right")
+          ? { x: last.left + 120, y: last.top + 30 }
+          : { x: last.left, y: last.top + 30 };
+      } else {
+        endAnchor = { x: last.left + 30, y: last.top + 120 };
+      }
+    }
+
+    var maxBottom = rowCenterY + 70;
+    placements.forEach(function(p){
+      var bottom = p.orientation === "v" ? p.top + 120 : p.top + 60;
+      if(bottom + 30 > maxBottom) maxBottom = bottom + 30;
+    });
+
+    return { placements: placements, startAnchor: startAnchor, endAnchor: endAnchor, canvasHeight: maxBottom };
+  }
   function pipTotal(hand){ return hand.reduce(function(s,t){return s+t.a+t.b;},0); }
+  function teamOf(idx){ return idx % 2; } // seats 0&2 = team A, seats 1&3 = team B
+  function teammateIdx(idx){ return (idx + 2) % 4; }
 
   function saveSession(s){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){} }
   function loadSession(){ try{ var raw=localStorage.getItem(STORAGE_KEY); return raw?JSON.parse(raw):null; }catch(e){ return null; } }
@@ -383,7 +515,8 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   });
 
   socket.on("action_error", function(msg){
-    $("handMsg").textContent = msg;
+    if(!$("screen-lobby").classList.contains("hidden")) $("modeHint").textContent = msg;
+    else $("handMsg").textContent = msg;
   });
 
   socket.on("state", function(payload){
@@ -426,11 +559,12 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 
   /* ---------------- Screen routing ---------------- */
   function showScreenForPhase(){
-    ["screen-landing","screen-lobby","screen-game","screen-roundend"].forEach(function(id){ $(id).classList.add("hidden"); });
+    ["screen-landing","screen-lobby","screen-game","screen-roundend","screen-matchend"].forEach(function(id){ $(id).classList.add("hidden"); });
     if(!room){ $("screen-landing").classList.remove("hidden"); return; }
     if(room.phase === "lobby"){ $("screen-lobby").classList.remove("hidden"); renderLobby(); }
     else if(room.phase === "playing"){ $("screen-game").classList.remove("hidden"); renderGame(); }
     else if(room.phase === "roundend"){ $("screen-roundend").classList.remove("hidden"); renderRoundEnd(); }
+    else if(room.phase === "matchend"){ $("screen-matchend").classList.remove("hidden"); renderMatchEnd(); }
   }
 
   function amHost(){ return room && room.hostId === MY_ID; }
@@ -441,16 +575,46 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
     var letters = $("codeLetters"); letters.innerHTML = "";
     room.code.split("").forEach(function(ch){ letters.appendChild(el("span","",ch)); });
 
+    var showTeams = room.mode === "pairs" && room.players.length === 4;
+
     var list = $("lobbyPlayers"); list.innerHTML = "";
     room.players.forEach(function(p, idx){
       var row = el("div","lobby-player-row");
       var dot = el("div","dot"); dot.style.background = PLAYER_COLORS[idx % PLAYER_COLORS.length];
       row.appendChild(dot);
       row.appendChild(el("div","pname", p.name + (p.id===MY_ID ? " (you)" : "")));
+      if(showTeams){
+        row.appendChild(el("div","team-tag " + (teamOf(idx)===0 ? "team-a" : "team-b"), teamOf(idx)===0 ? "Team A" : "Team B"));
+      }
       if(p.id === room.hostId) row.appendChild(el("div","host-tag","Host"));
       list.appendChild(row);
     });
     for(var i=room.players.length;i<4;i++) list.appendChild(el("div","lobby-empty-slot","Open seat — share the code above"));
+
+    // Mode selector
+    var pairsAvailable = room.players.length === 4;
+    var singlesTab = $("modeTabSingles");
+    var pairsTab = $("modeTabPairs");
+    singlesTab.classList.toggle("active", room.mode !== "pairs");
+    pairsTab.classList.toggle("active", room.mode === "pairs");
+    pairsTab.classList.toggle("locked", !pairsAvailable);
+    var isHost = amHost();
+    singlesTab.classList.toggle("readonly", !isHost);
+    pairsTab.classList.toggle("readonly", !isHost);
+    $("modeHint").textContent = !pairsAvailable
+      ? "Pairs (2v2) unlocks once exactly 4 players have joined. Seats 1 & 3 team up against seats 2 & 4."
+      : (room.mode === "pairs" ? "Pairs mode: seats 1 & 3 are partners, seats 2 & 4 are partners." : "Singles: everyone plays for themselves.");
+
+    // Match length (target score)
+    var scoreButtons = $("scoreTabs").querySelectorAll(".mode-tab");
+    scoreButtons.forEach(function(btn){
+      var val = parseInt(btn.getAttribute("data-score"), 10);
+      btn.classList.toggle("active", room.targetScore === val);
+      btn.classList.toggle("readonly", !isHost);
+    });
+    $("scoreHint").textContent = isHost
+      ? "First to " + room.targetScore + " points wins the match."
+      : "Match length: first to " + room.targetScore + " points.";
 
     var startBtn = $("startGameBtn");
     if(amHost()){
@@ -463,6 +627,22 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
     }
   }
 
+  $("modeTabSingles").addEventListener("click", function(){
+    if(!amHost() || !room) return;
+    socket.emit("set_mode", { mode: "singles" });
+  });
+  $("modeTabPairs").addEventListener("click", function(){
+    if(!amHost() || !room) return;
+    if(room.players.length !== 4) return;
+    socket.emit("set_mode", { mode: "pairs" });
+  });
+  $("scoreTabs").querySelectorAll(".mode-tab").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      if(!amHost() || !room) return;
+      socket.emit("set_target_score", { targetScore: parseInt(btn.getAttribute("data-score"), 10) });
+    });
+  });
+
   $("copyCodeBtn").addEventListener("click", function(){
     var fb = $("copyFeedback");
     function showFb(){ fb.classList.remove("hidden"); setTimeout(function(){ fb.classList.add("hidden"); }, 1500); }
@@ -470,12 +650,16 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
     else showFb();
   });
 
-  $("leaveLobbyBtn").addEventListener("click", function(){
+  function exitToHome(){
     socket.emit("leave_room");
     clearSession();
     room = null;
     showScreenForPhase();
-  });
+  }
+
+  $("leaveLobbyBtn").addEventListener("click", exitToHome);
+  $("exitFromRoundEndBtn").addEventListener("click", exitToHome);
+  $("exitFromMatchEndBtn").addEventListener("click", exitToHome);
 
   $("startGameBtn").addEventListener("click", function(){
     socket.emit("start_game");
@@ -494,18 +678,26 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   function handHasPlayable(hand){ return hand.some(function(t){ return tilePlayability(t).any; }); }
 
   function renderGame(){
-    $("roundLabel").textContent = "Round " + room.round;
+    $("roundLabel").textContent = "Round " + room.round + (room.mode === "pairs" ? " · Pairs" : "");
     $("boneyardCount").textContent = room.boneyardCount;
     $("roomPillCode").textContent = "Room " + room.code;
 
+    var myIdx = myIndex();
+    var isPairs = room.mode === "pairs" && room.players.length === 4;
     var mine = amMyTurn();
     var banner = $("turnBanner");
     banner.className = "turn-banner" + (mine ? " mine" : "");
-    banner.textContent = mine ? "Your turn!" : (room.players[room.currentIdx].name + " is playing…");
+    if(mine){
+      banner.textContent = "Your turn!";
+    } else if(isPairs && room.currentIdx === teammateIdx(myIdx)){
+      banner.textContent = "Your partner " + room.players[room.currentIdx].name + " is playing…";
+    } else {
+      banner.textContent = room.players[room.currentIdx].name + " is playing…";
+    }
 
     var oppRow = $("opponentsRow"); oppRow.innerHTML = "";
     room.players.forEach(function(p, idx){
-      if(idx === myIndex()) return;
+      if(idx === myIdx) return;
       var card = el("div","opp-card" + (idx===room.currentIdx ? " active":"") + (p.connected?"":" offline"));
       var top = el("div","opp-top");
       var nameSpan = el("span","opp-name", p.name + (p.connected ? "" : " (offline)"));
@@ -513,6 +705,9 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
       top.appendChild(nameSpan);
       top.appendChild(el("span","opp-score", p.score + " pts"));
       card.appendChild(top);
+      if(isPairs){
+        card.appendChild(el("div","team-tag " + (teamOf(idx)===0 ? "team-a" : "team-b"), idx===teammateIdx(myIdx) ? "Your partner" : "Opponent"));
+      }
       var backs = el("div","opp-backs");
       for(var i=0;i<p.handCount;i++) backs.appendChild(el("div","back"));
       card.appendChild(backs);
@@ -522,21 +717,38 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 
     var boardRow = $("boardRow"); boardRow.innerHTML = "";
     if(room.board.length === 0){
+      boardRow.style.width = "100%";
+      boardRow.style.height = "180px";
       boardRow.appendChild(el("div","empty-board-msg","The table is empty — first tile played can land anywhere."));
     } else {
-      var hand = room.players[myIndex()].hand || [];
+      var hand = room.players[myIdx].hand || [];
       var selTile = hand.find(function(t){ return t.id === mySelectedTileId; });
       var leftActionable = mine && selTile && tilePlayability(selTile).left;
       var rightActionable = mine && selTile && tilePlayability(selTile).right;
 
+      var canvasWidth = Math.max($("boardWrap").clientWidth - 32, 360);
+      var layout = layoutBoardSnake(room.board, canvasWidth);
+
+      boardRow.style.width = canvasWidth + "px";
+      boardRow.style.height = layout.canvasHeight + "px";
+
+      layout.placements.forEach(function(p){
+        boardRow.appendChild(makeBoardTileEl(p.bt.left, p.bt.right, p.orientation, p.left, p.top));
+      });
+
       if(leftActionable){
-        var lz = el("div","end-zone","\u25C2 Play<br>here");
+        var lz = el("div","end-zone","\u25C2");
+        lz.style.left = (layout.startAnchor.x - 56) + "px";
+        lz.style.top = (layout.startAnchor.y - 35) + "px";
+        lz.style.width = "48px"; lz.style.height = "70px";
         lz.addEventListener("click", function(){ socket.emit("play_tile", { tileId: selTile.id, side:"left" }); mySelectedTileId=null; });
         boardRow.appendChild(lz);
       }
-      room.board.forEach(function(bt){ boardRow.appendChild(makeTileEl(bt.left, bt.right, "h")); });
       if(rightActionable){
-        var rz = el("div","end-zone","Play<br>here \u25B8");
+        var rz = el("div","end-zone","\u25B8");
+        rz.style.left = layout.endAnchor.x + "px";
+        rz.style.top = (layout.endAnchor.y - 35) + "px";
+        rz.style.width = "48px"; rz.style.height = "70px";
         rz.addEventListener("click", function(){ socket.emit("play_tile", { tileId: selTile.id, side:"right" }); mySelectedTileId=null; });
         boardRow.appendChild(rz);
       }
@@ -554,6 +766,10 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 
     $("activePlayerLabel").textContent = "Your tiles";
     $("activePlayerLabel").style.color = PLAYER_COLORS[idx % PLAYER_COLORS.length];
+    if(room.mode === "pairs" && room.players.length === 4){
+      var partner = room.players[teammateIdx(idx)];
+      $("activePlayerLabel").textContent = "Your tiles · partnered with " + partner.name;
+    }
 
     var handRow = $("handRow"); handRow.innerHTML = "";
     var actionsEl = $("handActions"); actionsEl.innerHTML = "";
@@ -605,16 +821,19 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 
   /* ---------------- Round end ---------------- */
   function renderRoundEnd(){
-    var info = room.lastResult || { title:"Round Over", reason:"", winnerName:null };
-    $("roundendEyebrow").textContent = "Round " + room.round + " Over";
+    var info = room.lastResult || { title:"Round Over", reason:"", winnerName:null, winningTeam:null };
+    $("roundendEyebrow").textContent = "Round " + room.round + " Over · Race to " + room.targetScore + " points";
     $("roundendTitle").textContent = info.title;
     $("roundendReason").textContent = info.reason;
 
     var body = $("roundendBody"); body.innerHTML = "";
-    room.players.forEach(function(p){
-      var tr = el("tr", p.name === info.winnerName ? "winner-row" : "");
+    room.players.forEach(function(p, idx){
+      var isWinner = (info.winningTeam !== null && info.winningTeam !== undefined)
+        ? teamOf(idx) === info.winningTeam
+        : p.name === info.winnerName;
+      var tr = el("tr", isWinner ? "winner-row" : "");
       var pips = p.hand ? pipTotal(p.hand) : "—";
-      tr.innerHTML = '<td>' + (p.name===info.winnerName ? "\uD83C\uDFC6 " : "") + p.name + '</td>' +
+      tr.innerHTML = '<td>' + (isWinner ? "\uD83C\uDFC6 " : "") + p.name + '</td>' +
                      '<td class="num">' + pips + '</td>' +
                      '<td class="num">' + p.score + '</td>';
       body.appendChild(tr);
@@ -637,6 +856,46 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
       waitMsg.classList.remove("hidden");
     }
   }
+
+  /* ---------------- Match end ---------------- */
+  function renderMatchEnd(){
+    var info = room.matchResult || { title:"Match Over", reason:"", winningTeam:null };
+    $("matchendTitle").textContent = info.title;
+    $("matchendReason").textContent = info.reason;
+
+    var body = $("matchendBody"); body.innerHTML = "";
+    var maxScore = Math.max.apply(null, room.players.map(function(p){ return p.score; }));
+    room.players.forEach(function(p, idx){
+      var isWinner = (info.winningTeam !== null && info.winningTeam !== undefined)
+        ? teamOf(idx) === info.winningTeam
+        : p.score === maxScore;
+      var tr = el("tr", isWinner ? "winner-row" : "");
+      tr.innerHTML = '<td>' + (isWinner ? "\uD83C\uDFC6 " : "") + p.name + '</td>' + '<td class="num">' + p.score + '</td>';
+      body.appendChild(tr);
+    });
+
+    var actions = $("matchendActionsHost");
+    var waitMsg = $("matchendWaitMsg");
+    if(amHost()){
+      waitMsg.classList.add("hidden");
+      actions.classList.remove("hidden");
+      actions.innerHTML = "";
+      var againBtn = el("button","btn-ghost","Play Again (back to lobby)");
+      againBtn.addEventListener("click", function(){ socket.emit("play_again"); });
+      actions.appendChild(againBtn);
+    } else {
+      actions.classList.add("hidden");
+      waitMsg.classList.remove("hidden");
+    }
+  }
+
+  var resizeTimer = null;
+  window.addEventListener("resize", function(){
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function(){
+      if(room && room.phase === "playing") renderGame();
+    }, 150);
+  });
 
   showScreenForPhase();
 })();
