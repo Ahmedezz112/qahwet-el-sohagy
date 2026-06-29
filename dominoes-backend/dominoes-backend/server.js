@@ -31,6 +31,8 @@ function viewForPlayer(room, playerId) {
   return {
     code: room.code,
     phase: room.phase,
+    mode: room.mode,
+    targetScore: room.targetScore,
     hostId: room.hostId,
     round: room.round,
     board: room.board,
@@ -40,6 +42,7 @@ function viewForPlayer(room, playerId) {
     currentIdx: room.currentIdx,
     forcedTileId: room.forcedTileId,
     lastResult: room.lastResult || null,
+    matchResult: room.matchResult || null,
     youAre: playerId,
     players: room.players.map((p) => ({
       id: p.id,
@@ -70,6 +73,13 @@ function currentPlayerIdx(socket, room) {
   return room.players.findIndex((p) => p.id === socket.data.playerId);
 }
 
+/** Pairs mode only makes sense with exactly 4 seats — drop back to singles otherwise. */
+function enforceModeValidity(room) {
+  if (room.mode === "pairs" && room.players.length !== 4) {
+    room.mode = "singles";
+  }
+}
+
 io.on("connection", (socket) => {
   socket.on("create_room", ({ name }, cb) => {
     name = String(name || "").trim().slice(0, 14) || "Player";
@@ -80,6 +90,8 @@ io.on("connection", (socket) => {
     const room = {
       code,
       phase: "lobby",
+      mode: "singles",
+      targetScore: 101,
       hostId: playerId,
       round: 1,
       players: [
@@ -92,7 +104,8 @@ io.on("connection", (socket) => {
       currentIdx: 0,
       passesInRow: 0,
       forcedTileId: null,
-      lastResult: null
+      lastResult: null,
+      matchResult: null
     };
     rooms[code] = room;
     socket.data.code = code;
@@ -116,6 +129,7 @@ io.on("connection", (socket) => {
       id: playerId, name, colorIdx: room.players.length, hand: [], score: 0,
       connected: true, socketId: socket.id, token
     });
+    enforceModeValidity(room);
     socket.data.code = code;
     socket.data.playerId = playerId;
 
@@ -139,11 +153,37 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
+  socket.on("set_mode", ({ mode }) => {
+    const room = currentRoom(socket);
+    if (!room || room.phase !== "lobby") return;
+    if (room.hostId !== socket.data.playerId) return;
+    if (mode !== "singles" && mode !== "pairs") return;
+    if (mode === "pairs" && room.players.length !== 4) {
+      io.to(socket.id).emit("action_error", "Pairs mode needs exactly 4 players in the room.");
+      return;
+    }
+    room.mode = mode;
+    broadcastRoom(room);
+  });
+
+  socket.on("set_target_score", ({ targetScore }) => {
+    const room = currentRoom(socket);
+    if (!room || room.phase !== "lobby") return;
+    if (room.hostId !== socket.data.playerId) return;
+    if (!game.VALID_TARGET_SCORES.includes(targetScore)) return;
+    room.targetScore = targetScore;
+    broadcastRoom(room);
+  });
+
   socket.on("start_game", () => {
     const room = currentRoom(socket);
     if (!room) return;
     if (room.hostId !== socket.data.playerId) return;
     if (room.players.length < 2 || room.players.length > 4) return;
+    if (room.mode === "pairs" && room.players.length !== 4) {
+      io.to(socket.id).emit("action_error", "Pairs mode needs exactly 4 players in the room.");
+      return;
+    }
     game.dealAndStart(room);
     broadcastRoom(room);
   });
@@ -190,6 +230,18 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
+  socket.on("play_again", () => {
+    const room = currentRoom(socket);
+    if (!room || room.phase !== "matchend") return;
+    if (room.hostId !== socket.data.playerId) return;
+    room.players.forEach((p) => (p.score = 0));
+    room.round = 1;
+    room.matchResult = null;
+    room.lastResult = null;
+    room.phase = "lobby";
+    broadcastRoom(room);
+  });
+
   socket.on("leave_room", () => {
     const room = currentRoom(socket);
     if (!room) return;
@@ -205,6 +257,7 @@ io.on("connection", (socket) => {
       if (room.hostId === socket.data.playerId) {
         room.hostId = room.players[0].id;
       }
+      enforceModeValidity(room);
       broadcastRoom(room);
     } else {
       room.players[idx].connected = false;
