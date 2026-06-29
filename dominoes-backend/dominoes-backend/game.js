@@ -60,9 +60,65 @@ function findStartingPlayer(players) {
   return 0;
 }
 
+function teamOf(idx) {
+  return idx % 2;
+}
+
+const VALID_TARGET_SCORES = [51, 101, 151, 201];
+
+/**
+ * Call right after a round's scores have been applied. If anyone (or,
+ * in pairs mode, any team) has reached the match's target score, this
+ * converts the room into "matchend" with a final-standings summary.
+ * Otherwise the round-end phase set earlier is left alone.
+ */
+function checkMatchEnd(room) {
+  const target = room.targetScore || 101;
+  const reached = room.players.some((p) => p.score >= target);
+  if (!reached) return;
+
+  room.phase = "matchend";
+
+  if (room.mode === "pairs") {
+    const teamScore = [0, 0];
+    room.players.forEach((p, i) => { teamScore[teamOf(i)] = p.score; });
+    if (teamScore[0] === teamScore[1]) {
+      room.matchResult = { title: "Match tied!", reason: `Both teams reached ${teamScore[0]} points together.`, winningTeam: null };
+      return;
+    }
+    const winningTeam = teamScore[0] > teamScore[1] ? 0 : 1;
+    const names = room.players.filter((p, i) => teamOf(i) === winningTeam).map((p) => p.name).join(" & ");
+    room.matchResult = {
+      title: `${names} win the match!`,
+      reason: `First to ${target} points, final score ${teamScore[winningTeam]} — ${teamScore[1 - winningTeam]}.`,
+      winningTeam
+    };
+    return;
+  }
+
+  const maxScore = Math.max(...room.players.map((p) => p.score));
+  const champs = room.players.filter((p) => p.score === maxScore);
+  if (champs.length > 1) {
+    room.matchResult = { title: "Match tied!", reason: `${champs.map((p) => p.name).join(" & ")} both reached ${maxScore} points.`, winningTeam: null };
+    return;
+  }
+  room.matchResult = {
+    title: `${champs[0].name} wins the match!`,
+    reason: `First to ${target} points, finishing with ${champs[0].score}.`,
+    winningTeam: null
+  };
+}
+
 function dealAndStart(room) {
+  if (room.mode === "pairs" && room.players.length !== 4) {
+    room.mode = "singles"; // pairs only ever makes sense with exactly 4 seats
+  }
+  if (!VALID_TARGET_SCORES.includes(room.targetScore)) {
+    room.targetScore = 101;
+  }
   const deck = shuffle(buildDeck());
-  const tilesEach = room.players.length === 2 ? 7 : 5;
+  const tilesEach =
+    room.mode === "pairs" ? 7 : room.players.length === 2 ? 7 : 5;
   room.players.forEach((p) => {
     p.hand = deck.splice(0, tilesEach);
   });
@@ -73,6 +129,7 @@ function dealAndStart(room) {
   room.passesInRow = 0;
   room.forcedTileId = null;
   room.lastResult = null;
+  room.matchResult = null;
   room.currentIdx = findStartingPlayer(room.players);
   room.phase = "playing";
 }
@@ -99,6 +156,26 @@ function placeTileInternal(room, tile, side) {
 
 function endRoundByDomino(room, winnerIdx) {
   const winner = room.players[winnerIdx];
+
+  if (room.mode === "pairs") {
+    const winningTeam = teamOf(winnerIdx);
+    const partner = room.players.find((p, i) => i !== winnerIdx && teamOf(i) === winningTeam);
+    const opponents = room.players.filter((p, i) => teamOf(i) !== winningTeam);
+    const pts = opponents.reduce((s, p) => s + pipTotal(p.hand), 0);
+    room.players.forEach((p, i) => {
+      if (teamOf(i) === winningTeam) p.score += pts;
+    });
+    room.phase = "roundend";
+    room.lastResult = {
+      title: `${winner.name} went out!`,
+      reason: `${winner.name} & ${partner.name}'s team scores the pips left in the other team's hands.`,
+      winnerName: null,
+      winningTeam
+    };
+    checkMatchEnd(room);
+    return;
+  }
+
   const others = room.players.filter((p) => p !== winner);
   const pts = others.reduce((s, p) => s + pipTotal(p.hand), 0);
   winner.score += pts;
@@ -106,11 +183,44 @@ function endRoundByDomino(room, winnerIdx) {
   room.lastResult = {
     title: `${winner.name} went out!`,
     reason: `${winner.name} played their last tile and scores the pips left in everyone else's hand.`,
-    winnerName: winner.name
+    winnerName: winner.name,
+    winningTeam: null
   };
+  checkMatchEnd(room);
 }
 
 function endRoundByBlock(room) {
+  if (room.mode === "pairs") {
+    const teamTotals = [0, 0];
+    room.players.forEach((p, i) => {
+      teamTotals[teamOf(i)] += pipTotal(p.hand);
+    });
+    room.phase = "roundend";
+    if (teamTotals[0] === teamTotals[1]) {
+      room.lastResult = {
+        title: "Blocked — it's a tie",
+        reason: "Both teams are holding equal pip totals, so no points are awarded this round.",
+        winnerName: null,
+        winningTeam: null
+      };
+      return;
+    }
+    const winningTeam = teamTotals[0] < teamTotals[1] ? 0 : 1;
+    const pts = Math.abs(teamTotals[0] - teamTotals[1]);
+    const teamNames = room.players.filter((p, i) => teamOf(i) === winningTeam).map((p) => p.name).join(" & ");
+    room.players.forEach((p, i) => {
+      if (teamOf(i) === winningTeam) p.score += pts;
+    });
+    room.lastResult = {
+      title: `Blocked — ${teamNames} win the round`,
+      reason: "No one could play. Their team held the lower combined pip count and scores the difference.",
+      winnerName: null,
+      winningTeam
+    };
+    checkMatchEnd(room);
+    return;
+  }
+
   const totals = room.players.map((p) => pipTotal(p.hand));
   const minVal = Math.min(...totals);
   const lowest = room.players.filter((p, i) => totals[i] === minVal);
@@ -119,7 +229,8 @@ function endRoundByBlock(room) {
     room.lastResult = {
       title: "Blocked — it's a tie",
       reason: "No one can play and the lowest hand pip-count is tied, so no points are awarded this round.",
-      winnerName: null
+      winnerName: null,
+      winningTeam: null
     };
     return;
   }
@@ -131,8 +242,10 @@ function endRoundByBlock(room) {
   room.lastResult = {
     title: `Blocked — ${winner.name} wins the round`,
     reason: `No one could play. ${winner.name} held the lowest pip count and scores the difference.`,
-    winnerName: winner.name
+    winnerName: winner.name,
+    winningTeam: null
   };
+  checkMatchEnd(room);
 }
 
 /** Returns { error } on failure, or { ok:true } on success (mutates room). */
@@ -199,6 +312,9 @@ module.exports = {
   tilePlayability,
   handHasPlayable,
   findStartingPlayer,
+  teamOf,
+  VALID_TARGET_SCORES,
+  checkMatchEnd,
   dealAndStart,
   playTile,
   drawOrPass
