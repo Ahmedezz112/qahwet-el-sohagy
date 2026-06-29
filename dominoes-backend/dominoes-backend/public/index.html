@@ -463,29 +463,39 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 
       if(willOverflow && i > 0){
         // Edge turn — always vertical, bridges to the next row.
+        // Top half always shows the value connecting back to the previous
+        // tile (bt.left) regardless of which screen-direction this row
+        // travels in — vertical position alone encodes chain order here.
         if(mode === "right"){
-          placements.push({ bt: bt, orientation: "v", left: cursorX, top: rowCenterY, modeAtPlacement: mode, isTurn: true });
+          placements.push({ bt: bt, orientation: "v", left: cursorX, top: rowCenterY, modeAtPlacement: mode, isTurn: true, dispLeft: bt.left, dispRight: bt.right });
           cursorX += half;
         } else {
-          placements.push({ bt: bt, orientation: "v", left: cursorX - half, top: rowCenterY, modeAtPlacement: mode, isTurn: true });
+          placements.push({ bt: bt, orientation: "v", left: cursorX - half, top: rowCenterY, modeAtPlacement: mode, isTurn: true, dispLeft: bt.left, dispRight: bt.right });
           cursorX -= half;
         }
         rowCenterY += rowGap;
         mode = (mode === "right") ? "left" : "right";
       } else if(isDouble){
-        // Spinner — vertical, but stays put in the current row.
+        // Spinner — vertical, stays in the current row. Both halves are the
+        // same value anyway, so direction can't matter visually.
         if(mode === "right"){
-          placements.push({ bt: bt, orientation: "v", left: cursorX, top: rowCenterY - half, modeAtPlacement: mode, isTurn: false });
+          placements.push({ bt: bt, orientation: "v", left: cursorX, top: rowCenterY - half, modeAtPlacement: mode, isTurn: false, dispLeft: bt.left, dispRight: bt.right });
           cursorX += spinnerStep;
         } else {
-          placements.push({ bt: bt, orientation: "v", left: cursorX - half, top: rowCenterY - half, modeAtPlacement: mode, isTurn: false });
+          placements.push({ bt: bt, orientation: "v", left: cursorX - half, top: rowCenterY - half, modeAtPlacement: mode, isTurn: false, dispLeft: bt.left, dispRight: bt.right });
           cursorX -= spinnerStep;
         }
       } else if(mode === "right"){
-        placements.push({ bt: bt, orientation: "h", left: cursorX, top: rowCenterY - half/2, modeAtPlacement: mode, isTurn: false });
+        // Screen-left-to-right row: stored left/right already match what's
+        // drawn on the left/right half respectively.
+        placements.push({ bt: bt, orientation: "h", left: cursorX, top: rowCenterY - half/2, modeAtPlacement: mode, isTurn: false, dispLeft: bt.left, dispRight: bt.right });
         cursorX += tileLong;
       } else {
-        placements.push({ bt: bt, orientation: "h", left: cursorX - unit, top: rowCenterY - half/2, modeAtPlacement: mode, isTurn: false });
+        // Screen-right-to-left row: the tile's "backward" connection (left)
+        // is now physically on this tile's screen-right, and its "forward"
+        // connection (right) is on the screen-left — mirror the halves so
+        // the pips actually line up with their neighbors.
+        placements.push({ bt: bt, orientation: "h", left: cursorX - unit, top: rowCenterY - half/2, modeAtPlacement: mode, isTurn: false, dispLeft: bt.right, dispRight: bt.left });
         cursorX -= tileLong;
       }
     });
@@ -764,7 +774,7 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
       boardRow.style.height = layout.canvasHeight + "px";
 
       layout.placements.forEach(function(p){
-        boardRow.appendChild(makeBoardTileEl(p.bt.left, p.bt.right, p.orientation, p.left, p.top, layout.unit, layout.half));
+        boardRow.appendChild(makeBoardTileEl(p.dispLeft, p.dispRight, p.orientation, p.left, p.top, layout.unit, layout.half));
       });
 
       var zoneW = 40 * scale, zoneH = 58 * scale;
