@@ -158,6 +158,32 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   border:1px solid rgba(244,239,230,.15); border-radius:999px; padding:8px 14px; color:var(--brass-light);
 }
 
+.boneyard-overlay{
+  position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.7);
+  display:flex; align-items:center; justify-content:center; padding:20px;
+}
+.boneyard-card{
+  background: rgba(17,36,26,.95); border:1px solid rgba(244,239,230,.18); border-radius:20px;
+  padding:30px 28px; max-width:560px; width:100%; text-align:center; box-shadow: 0 24px 60px rgba(0,0,0,.55);
+}
+.boneyard-hint{ font-family:var(--font-body); font-size:13px; color:var(--cream-dim); margin-top:6px; margin-bottom:6px; }
+.boneyard-tiles{
+  display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-top:18px;
+  max-height:50vh; overflow-y:auto; padding:8px;
+}
+.boneyard-tile-back{
+  position:relative; width:56px; height:100px; border-radius:8px; flex-shrink:0; cursor:pointer;
+  background: linear-gradient(155deg, var(--wood-light) 0%, var(--wood) 55%, var(--wood-dark) 100%);
+  box-shadow: 0 4px 0 rgba(0,0,0,.3), 0 8px 14px rgba(0,0,0,.35), inset 0 0 0 1.5px rgba(255,255,255,.12);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.boneyard-tile-back::after{
+  content:""; position:absolute; inset:9px; border:1.5px solid rgba(255,255,255,.18); border-radius:4px;
+}
+.boneyard-tile-back:hover:not(.picked){ transform: translateY(-8px); box-shadow: 0 12px 20px rgba(0,0,0,.4), inset 0 0 0 1.5px rgba(255,255,255,.2); }
+.boneyard-tile-back.chosen{ box-shadow: 0 0 0 3px var(--brass-light), 0 10px 18px rgba(0,0,0,.4); }
+.boneyard-tile-back.picked{ opacity:.35; cursor:not-allowed; pointer-events:none; transform:none; }
+
 .turn-banner{
   text-align:center; padding:12px 18px; border-radius:12px; font-family:var(--font-display); font-size:18px;
   background: rgba(0,0,0,.2); border:1px solid rgba(244,239,230,.1);
@@ -361,6 +387,14 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
         </div>
         <div class="hand-row" id="handRow"></div>
         <div class="hand-actions" id="handActions"></div>
+      </div>
+    </div>
+
+    <div class="boneyard-overlay hidden" id="boneyardOverlay">
+      <div class="boneyard-card">
+        <div class="eyebrow">Pick a tile from the boneyard</div>
+        <div class="boneyard-hint">You can't see what it is until you pick it — tap any tile.</div>
+        <div class="boneyard-tiles" id="boneyardTiles"></div>
       </div>
     </div>
 
@@ -718,6 +752,7 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   function handHasPlayable(hand){ return hand.some(function(t){ return tilePlayability(t).any; }); }
 
   function renderGame(){
+    closeBoneyardOverlay();
     $("roundLabel").textContent = "Round " + room.round + (room.mode === "pairs" ? " · Pairs" : "");
     $("boneyardCount").textContent = room.boneyardCount;
     $("roomPillCode").textContent = "Room " + room.code;
@@ -855,10 +890,41 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
       msgEl.textContent = mySelectedTileId ? "Choose which end to play it on." : "Tap a glowing tile to play it.";
     } else {
       msgEl.textContent = "No playable tile in hand.";
-      var drawBtn = el("button","btn-brass", room.boneyardCount > 0 ? "Draw from Boneyard" : "Pass — Boneyard Empty");
-      drawBtn.addEventListener("click", function(){ socket.emit("draw_or_pass"); });
-      actionsEl.appendChild(drawBtn);
+      if(room.boneyardCount > 0){
+        var drawBtn = el("button","btn-brass","Draw from Boneyard");
+        drawBtn.addEventListener("click", openBoneyardOverlay);
+        actionsEl.appendChild(drawBtn);
+      } else {
+        var passBtn = el("button","btn-brass","Pass — Boneyard Empty");
+        passBtn.addEventListener("click", function(){ socket.emit("draw_or_pass"); });
+        actionsEl.appendChild(passBtn);
+      }
     }
+  }
+
+  function closeBoneyardOverlay(){
+    $("boneyardOverlay").classList.add("hidden");
+    $("boneyardTiles").innerHTML = "";
+  }
+
+  function openBoneyardOverlay(){
+    var container = $("boneyardTiles");
+    container.innerHTML = "";
+    var count = room.boneyardCount;
+    for(var i=0;i<count;i++){
+      var back = el("div","boneyard-tile-back");
+      back.addEventListener("click", function(){
+        if(this.classList.contains("picked")) return;
+        var allBacks = container.querySelectorAll(".boneyard-tile-back");
+        allBacks.forEach(function(b){ b.classList.add("picked"); });
+        this.classList.remove("picked");
+        this.classList.add("chosen");
+        socket.emit("draw_or_pass");
+        setTimeout(closeBoneyardOverlay, 500);
+      });
+      container.appendChild(back);
+    }
+    $("boneyardOverlay").classList.remove("hidden");
   }
 
   /* ---------------- Round end ---------------- */
