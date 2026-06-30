@@ -202,12 +202,16 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("draw_or_pass", () => {
+  socket.on("draw_one", () => {
     const room = currentRoom(socket);
     if (!room || room.phase !== "playing") return;
     const idx = currentPlayerIdx(socket, room);
     if (idx === -1 || idx !== room.currentIdx) return;
-    game.drawOrPass(room, idx);
+    const result = game.drawOneTile(room, idx);
+    if (result.drewTileId) {
+      const tile = room.players[idx].hand.find((t) => t.id === result.drewTileId);
+      if (tile) io.to(socket.id).emit("you_drew", { tile, mustDrawAgain: result.mustDrawAgain });
+    }
     broadcastRoom(room);
   });
 
