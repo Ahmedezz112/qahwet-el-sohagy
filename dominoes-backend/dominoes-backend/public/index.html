@@ -193,6 +193,30 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .boneyard-tile-back.revealed .domino-half{ width:100%; height:50%; padding:7%; }
 .boneyard-tile-back.revealed .tile-div{ height:3px; width:82%; align-self:center; background:rgba(0,0,0,.28); border-radius:2px; }
 
+.boneyard-center-pile{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  z-index:6; display:flex; flex-direction:column; align-items:center; gap:8px;
+  cursor:pointer; pointer-events:auto;
+}
+.boneyard-center-pile .pile-stack{ position:relative; width:56px; height:100px; transition: transform .15s ease; }
+.boneyard-center-pile:hover .pile-stack{ transform: translateY(-4px); }
+.boneyard-center-pile .pile-back{
+  position:absolute; inset:0; border-radius:8px;
+  background: linear-gradient(155deg, var(--wood-light) 0%, var(--wood) 55%, var(--wood-dark) 100%);
+  box-shadow: 0 4px 0 rgba(0,0,0,.3), 0 8px 14px rgba(0,0,0,.35), inset 0 0 0 1.5px rgba(255,255,255,.12);
+}
+.boneyard-center-pile .pile-back::after{
+  content:""; position:absolute; inset:9px; border:1.5px solid rgba(255,255,255,.18); border-radius:4px;
+}
+.boneyard-center-pile .pile-back-1{ transform: rotate(-4deg); }
+.boneyard-center-pile .pile-back-2{ transform: translate(5px,-5px) rotate(3deg); }
+.boneyard-center-pile .pile-back-3{ transform: translate(10px,-10px) rotate(8deg); }
+.boneyard-center-pile .pile-label{
+  font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--brass-light); background: rgba(0,0,0,.45); padding:5px 12px; border-radius:999px;
+  white-space:nowrap; animation: pulseZone 1.4s ease-in-out infinite;
+}
+
 .turn-banner{
   text-align:center; padding:12px 18px; border-radius:12px; font-family:var(--font-display); font-size:18px;
   background: rgba(0,0,0,.2); border:1px solid rgba(244,239,230,.1);
@@ -210,6 +234,7 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .opp-backs{display:flex; gap:3px;}
 .opp-backs .back{width:11px; height:18px; border-radius:2px; background: linear-gradient(135deg, var(--wood-light), var(--wood)); border:1px solid var(--wood-dark);}
 
+.board-outer{ flex:1; display:flex; position:relative; min-height:220px; }
 .board-wrap{
   flex:1; background: radial-gradient(ellipse at 50% 30%, var(--felt-light) 0%, var(--felt) 60%);
   border-radius:16px; border:1px solid rgba(0,0,0,.3); box-shadow: inset 0 0 50px rgba(0,0,0,.35);
@@ -323,7 +348,10 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
   .opp-name{ font-size:11px; }
   .opp-score{ font-size:10px; }
   .opp-backs .back{ width:8px; height:13px; }
+  .board-outer{ min-height:120px; }
   .board-wrap{ min-height:120px; max-height:34vh; padding:10px 10px; }
+  .boneyard-center-pile .pile-stack{ width:42px; height:74px; }
+  .boneyard-center-pile .pile-label{ font-size:9px; padding:4px 9px; }
   .hand-area{ gap:5px; }
   .hand-status{ gap:6px; }
   .hand-status .who{ font-size:13px; }
@@ -432,7 +460,17 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
       </div>
       <div class="turn-banner" id="turnBanner"></div>
       <div class="opponents-row" id="opponentsRow"></div>
-      <div class="board-wrap" id="boardWrap"><div class="table-canvas" id="boardRow"></div></div>
+      <div class="board-outer">
+        <div class="board-wrap" id="boardWrap"><div class="table-canvas" id="boardRow"></div></div>
+        <div class="boneyard-center-pile hidden" id="boneyardCenterPile">
+          <div class="pile-stack">
+            <div class="pile-back pile-back-3"></div>
+            <div class="pile-back pile-back-2"></div>
+            <div class="pile-back pile-back-1"></div>
+          </div>
+          <div class="pile-label" id="pileLabel">Tap to draw</div>
+        </div>
+      </div>
       <div class="hand-area">
         <div class="hand-status">
           <div class="who" id="activePlayerLabel">Your tiles</div>
@@ -963,22 +1001,34 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
 
     if(!mine){
       msgEl.textContent = "Waiting for " + room.players[room.currentIdx].name + "…";
+      showBoneyardPile(false);
     } else if(room.forcedTileId){
       msgEl.textContent = "You must play the tile you just drew.";
+      showBoneyardPile(false);
     } else if(anyPlayable){
       msgEl.textContent = mySelectedTileId ? "Choose which end to play it on." : "Tap a glowing tile to play it.";
+      showBoneyardPile(false);
+    } else if(room.boneyardCount > 0){
+      msgEl.textContent = "No playable tile — draw from the pile in the middle of the table.";
+      showBoneyardPile(true, openBoneyardOverlay);
     } else {
       msgEl.textContent = "No playable tile in hand.";
-      if(room.boneyardCount > 0){
-        var drawBtn = el("button","btn-brass","Draw from Boneyard");
-        drawBtn.addEventListener("click", openBoneyardOverlay);
-        actionsEl.appendChild(drawBtn);
-      } else {
-        var passBtn = el("button","btn-brass","Pass — Boneyard Empty");
-        passBtn.addEventListener("click", function(){ drawOneFromBoneyard(null); });
-        actionsEl.appendChild(passBtn);
-      }
+      showBoneyardPile(false);
+      var passBtn = el("button","btn-brass","Pass — Boneyard Empty");
+      passBtn.addEventListener("click", function(){ drawOneFromBoneyard(null); });
+      actionsEl.appendChild(passBtn);
     }
+  }
+
+  /** The boneyard now lives as a clickable pile in the middle of the table
+   * rather than a button under the hand. visible toggles it; onClick is
+   * only needed when showing it. */
+  function showBoneyardPile(visible, onClick){
+    var pile = $("boneyardCenterPile");
+    if(!pile) return;
+    pile.classList.toggle("hidden", !visible);
+    pile.onclick = visible ? onClick : null;
+    if(visible) $("pileLabel").textContent = "Tap to draw (" + room.boneyardCount + " left)";
   }
 
   function closeBoneyardOverlay(){
