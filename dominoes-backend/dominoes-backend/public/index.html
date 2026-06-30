@@ -183,6 +183,15 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .boneyard-tile-back:hover:not(.picked){ transform: translateY(-8px); box-shadow: 0 12px 20px rgba(0,0,0,.4), inset 0 0 0 1.5px rgba(255,255,255,.2); }
 .boneyard-tile-back.chosen{ box-shadow: 0 0 0 3px var(--brass-light), 0 10px 18px rgba(0,0,0,.4); }
 .boneyard-tile-back.picked{ opacity:.35; cursor:not-allowed; pointer-events:none; transform:none; }
+.boneyard-tile-back.drawing{ box-shadow: 0 0 0 3px var(--brass-light), 0 10px 18px rgba(0,0,0,.4); opacity:1; pointer-events:none; }
+.boneyard-tile-back.revealed{
+  background: linear-gradient(155deg, var(--cream) 0%, var(--cream-dim) 100%);
+  box-shadow: 0 0 0 3px var(--brass-light), 0 10px 18px rgba(0,0,0,.4);
+  display:flex; flex-direction:column; opacity:1; pointer-events:none; transform:none;
+}
+.boneyard-tile-back.revealed::after{ display:none; }
+.boneyard-tile-back.revealed .domino-half{ width:100%; height:50%; padding:7%; }
+.boneyard-tile-back.revealed .tile-div{ height:3px; width:82%; align-self:center; background:rgba(0,0,0,.28); border-radius:2px; }
 
 .turn-banner{
   text-align:center; padding:12px 18px; border-radius:12px; font-family:var(--font-display); font-size:18px;
@@ -448,6 +457,8 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   var room = null;
   var MY_ID = null;
   var mySelectedTileId = null;
+  var pendingDrawBack = null;   // the .boneyard-tile-back DOM node currently being revealed
+  var preDrawHandIds = null;    // Set of this player's tile ids right before the in-flight draw
 
   function $(id){ return document.getElementById(id); }
   function el(tag, cls, html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
@@ -594,9 +605,11 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   });
 
   socket.on("state", function(payload){
+    var awaitingDraw = !!pendingDrawBack;
     room = payload;
     MY_ID = payload.youAre;
-    showScreenForPhase();
+    if(awaitingDraw) handleDrawReveal();
+    else showScreenForPhase();
   });
 
   /* ---------------- Landing ---------------- */
@@ -633,6 +646,7 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 
   /* ---------------- Screen routing ---------------- */
   function showScreenForPhase(){
+    closeBoneyardOverlay();
     ["screen-landing","screen-lobby","screen-game","screen-roundend","screen-matchend"].forEach(function(id){ $(id).classList.add("hidden"); });
     if(!room){ $("screen-landing").classList.remove("hidden"); return; }
     if(room.phase === "lobby"){ $("screen-lobby").classList.remove("hidden"); renderLobby(); }
@@ -752,7 +766,6 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   function handHasPlayable(hand){ return hand.some(function(t){ return tilePlayability(t).any; }); }
 
   function renderGame(){
-    closeBoneyardOverlay();
     $("roundLabel").textContent = "Round " + room.round + (room.mode === "pairs" ? " · Pairs" : "");
     $("boneyardCount").textContent = room.boneyardCount;
     $("roomPillCode").textContent = "Room " + room.code;
@@ -896,13 +909,15 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
         actionsEl.appendChild(drawBtn);
       } else {
         var passBtn = el("button","btn-brass","Pass — Boneyard Empty");
-        passBtn.addEventListener("click", function(){ socket.emit("draw_or_pass"); });
+        passBtn.addEventListener("click", function(){ drawOneFromBoneyard(null); });
         actionsEl.appendChild(passBtn);
       }
     }
   }
 
   function closeBoneyardOverlay(){
+    pendingDrawBack = null;
+    preDrawHandIds = null;
     $("boneyardOverlay").classList.add("hidden");
     $("boneyardTiles").innerHTML = "";
   }
@@ -913,18 +928,66 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
     var count = room.boneyardCount;
     for(var i=0;i<count;i++){
       var back = el("div","boneyard-tile-back");
-      back.addEventListener("click", function(){
-        if(this.classList.contains("picked")) return;
-        var allBacks = container.querySelectorAll(".boneyard-tile-back");
-        allBacks.forEach(function(b){ b.classList.add("picked"); });
-        this.classList.remove("picked");
-        this.classList.add("chosen");
-        socket.emit("draw_or_pass");
-        setTimeout(closeBoneyardOverlay, 500);
-      });
+      back.addEventListener("click", function(){ drawOneFromBoneyard(this); });
       container.appendChild(back);
     }
     $("boneyardOverlay").classList.remove("hidden");
+  }
+
+  /** Triggers exactly one draw. backEl is the specific tile-back the player
+   * tapped (so we can flip that exact element to reveal the result), or
+   * null when there's nothing left to draw and this is just resolving a pass. */
+  function drawOneFromBoneyard(backEl){
+    if(pendingDrawBack) return; // a draw is already resolving, ignore extra clicks
+    var idx = myIndex();
+    preDrawHandIds = new Set((room.players[idx].hand || []).map(function(t){ return t.id; }));
+    pendingDrawBack = backEl || true; // truthy sentinel even with no element to animate
+
+    if(backEl){
+      $("boneyardTiles").querySelectorAll(".boneyard-tile-back").forEach(function(b){ b.classList.add("picked"); });
+      backEl.classList.remove("picked");
+      backEl.classList.add("drawing");
+    }
+    socket.emit("draw_one");
+  }
+
+  /** Called from the socket "state" handler when a draw we triggered has
+   * resolved. Reveals the drawn tile in place, then either lets the normal
+   * full re-render take over (forced tile to play, or turn ended) or, if
+   * the player must keep drawing, quietly removes that one tile-back and
+   * leaves the overlay open for the next pick. */
+  function handleDrawReveal(){
+    var idx = myIndex();
+    var hand = (idx > -1 && room.players[idx].hand) ? room.players[idx].hand : [];
+    var newTile = preDrawHandIds ? hand.find(function(t){ return !preDrawHandIds.has(t.id); }) : null;
+    var backEl = (pendingDrawBack && pendingDrawBack !== true) ? pendingDrawBack : null;
+
+    if(!newTile){
+      // Nothing was drawn (boneyard was already empty) — just resolve normally.
+      pendingDrawBack = null; preDrawHandIds = null;
+      showScreenForPhase();
+      return;
+    }
+
+    if(backEl && backEl.parentNode){
+      backEl.classList.remove("drawing");
+      backEl.classList.add("revealed");
+      backEl.innerHTML = tileInnerHTML(newTile.a, newTile.b);
+    }
+
+    var isForced = room.forcedTileId === newTile.id;
+    var mustDrawAgain = !isForced && room.boneyardCount > 0 && room.currentIdx === idx;
+
+    setTimeout(function(){
+      pendingDrawBack = null; preDrawHandIds = null;
+      if(!mustDrawAgain){
+        showScreenForPhase();
+      } else {
+        if(backEl && backEl.parentNode) backEl.parentNode.removeChild(backEl);
+        $("boneyardTiles").querySelectorAll(".boneyard-tile-back.picked").forEach(function(b){ b.classList.remove("picked"); });
+        $("boneyardCount").textContent = room.boneyardCount;
+      }
+    }, 700);
   }
 
   /* ---------------- Round end ---------------- */
