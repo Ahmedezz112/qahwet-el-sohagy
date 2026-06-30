@@ -265,6 +265,26 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
+  safeOn(socket, "forfeit", (payload, cb) => {
+    const room = currentRoom(socket);
+    if (!room || room.phase !== "playing") {
+      if (typeof cb === "function") cb({ ok: false, error: "There's no active game to forfeit." });
+      return;
+    }
+    const idx = currentPlayerIdx(socket, room);
+    if (idx === -1) {
+      if (typeof cb === "function") cb({ ok: false, error: "Couldn't find your seat in this room." });
+      return;
+    }
+
+    game.forfeitPlayer(room, idx);
+    socket.data.code = null;
+    socket.data.playerId = null;
+
+    if (typeof cb === "function") cb({ ok: true });
+    broadcastRoom(room);
+  });
+
   safeOn(socket, "next_round", () => {
     const room = currentRoom(socket);
     if (!room || room.phase !== "roundend") return;
