@@ -294,11 +294,55 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   .tile-v{width:56px; height:108px;}
   .code-letters span{width:38px; height:48px; font-size:22px;}
 }
+
+/* ===== Rotate-to-landscape prompt (phones only, gameplay screen only) ===== */
+.rotate-prompt{
+  display:none;
+  position:fixed; inset:0; z-index:200;
+  background: var(--felt-dark);
+  flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  text-align:center; padding:36px;
+}
+.rotate-prompt .rotate-icon{ font-size:54px; display:inline-block; animation: rotateHint 1.8s ease-in-out infinite; }
+@keyframes rotateHint{ 0%,100%{ transform:rotate(0deg);} 45%,55%{ transform:rotate(-90deg);} }
+.rotate-prompt h2{ color:var(--cream); font-size:21px; margin:0; }
+.rotate-prompt p{ color:var(--cream-dim); font-size:13px; max-width:280px; margin:0; font-family:var(--font-body); }
+.rotate-prompt button{ margin-top:8px; }
+body.show-rotate-prompt .rotate-prompt{ display:flex; }
+
+/* ===== Tight landscape layout for short mobile viewports ===== */
+@media screen and (orientation:landscape) and (max-height:520px){
+  .content-wrap{ padding:8px 14px; gap:6px; }
+  .topbar{ gap:6px; }
+  .topbar .brand h1{ font-size:16px; }
+  .eyebrow{ font-size:9px; }
+  .boneyard-pill, .room-pill{ padding:5px 10px; font-size:11px; }
+  .turn-banner{ padding:6px 14px; font-size:14px; }
+  .opponents-row{ gap:6px; }
+  .opp-card{ min-width:90px; padding:6px 8px; gap:3px; }
+  .opp-name{ font-size:11px; }
+  .opp-score{ font-size:10px; }
+  .opp-backs .back{ width:8px; height:13px; }
+  .board-wrap{ min-height:120px; max-height:34vh; padding:10px 10px; }
+  .hand-area{ gap:5px; }
+  .hand-status{ gap:6px; }
+  .hand-status .who{ font-size:13px; }
+  .hand-msg{ font-size:11px; }
+  .hand-row{ min-height:96px; padding:10px 8px 6px; gap:8px; }
+  .tile-v{ width:50px; height:92px; }
+  .hand-actions{ margin-top:0; }
+}
 </style>
 </head>
 <body>
 <div class="rail"></div>
 <div class="conn-pill" id="connPill"><span class="dot"></span><span id="connLabel">Connecting…</span></div>
+<div class="rotate-prompt" id="rotatePrompt">
+  <div class="rotate-icon">&#128241;</div>
+  <h2>Turn your phone sideways</h2>
+  <p>The table fits much better in landscape — no scrolling needed to see your tiles or the board.</p>
+  <button class="btn-ghost btn-small" id="rotateDismissBtn">Continue in portrait anyway</button>
+</div>
 <div id="app">
   <div class="content-wrap">
 
@@ -459,6 +503,7 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   var mySelectedTileId = null;
   var pendingDrawBack = null;   // the .boneyard-tile-back DOM node currently being revealed
   var preDrawHandIds = null;    // Set of this player's tile ids right before the in-flight draw
+  var rotateDismissed = false;  // user chose "Continue in portrait anyway" for this session
 
   function $(id){ return document.getElementById(id); }
   function el(tag, cls, html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
@@ -648,12 +693,33 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
   function showScreenForPhase(){
     closeBoneyardOverlay();
     ["screen-landing","screen-lobby","screen-game","screen-roundend","screen-matchend"].forEach(function(id){ $(id).classList.add("hidden"); });
-    if(!room){ $("screen-landing").classList.remove("hidden"); return; }
+    if(!room){ $("screen-landing").classList.remove("hidden"); updateRotatePrompt(); return; }
     if(room.phase === "lobby"){ $("screen-lobby").classList.remove("hidden"); renderLobby(); }
     else if(room.phase === "playing"){ $("screen-game").classList.remove("hidden"); renderGame(); }
     else if(room.phase === "roundend"){ $("screen-roundend").classList.remove("hidden"); renderRoundEnd(); }
     else if(room.phase === "matchend"){ $("screen-matchend").classList.remove("hidden"); renderMatchEnd(); }
+    updateRotatePrompt();
   }
+
+  /** Shown only while actively playing (screen-game), on a phone-sized
+   * viewport, while held in portrait — that's the one screen with a wide
+   * table layout that genuinely needs the extra horizontal room. */
+  function updateRotatePrompt(){
+    var isGameScreen = !!(room && room.phase === "playing");
+    var isPortraitPhone = window.matchMedia("(orientation: portrait)").matches && window.innerWidth <= 760;
+    var shouldShow = isGameScreen && isPortraitPhone && !rotateDismissed;
+    document.body.classList.toggle("show-rotate-prompt", shouldShow);
+  }
+
+  $("rotateDismissBtn").addEventListener("click", function(){
+    rotateDismissed = true;
+    updateRotatePrompt();
+  });
+
+  window.addEventListener("orientationchange", function(){
+    rotateDismissed = false; // re-evaluate fresh after a real rotation
+    setTimeout(updateRotatePrompt, 200);
+  });
 
   function amHost(){ return room && room.hostId === MY_ID; }
   function myIndex(){ return room ? room.players.findIndex(function(p){ return p.id === MY_ID; }) : -1; }
@@ -1065,6 +1131,7 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(function(){
       if(room && room.phase === "playing") renderGame();
+      updateRotatePrompt();
     }, 150);
   });
 
