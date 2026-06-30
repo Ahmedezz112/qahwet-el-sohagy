@@ -11,6 +11,9 @@
   --felt:#1F3D2E;
   --felt-dark:#11241A;
   --felt-light:#2C5440;
+  --table-felt:#1F3D2E;
+  --table-felt-dark:#11241A;
+  --table-felt-light:#2C5440;
   --wood:#5C3A21;
   --wood-dark:#371F11;
   --wood-light:#8B5A2B;
@@ -26,6 +29,15 @@
   --font-body:'Inter', sans-serif;
   --font-mono:'JetBrains Mono', monospace;
 }
+
+/* Host-selectable table colors — only repaint the playing surface itself,
+   not the app's overall green/brass branding (landing, lobby, etc). */
+body.table-green{ --table-felt:#1F3D2E; --table-felt-dark:#11241A; --table-felt-light:#2C5440; }
+body.table-black{ --table-felt:#1C1C1C; --table-felt-dark:#0A0A0A; --table-felt-light:#333333; }
+body.table-blue{ --table-felt:#1A2F4D; --table-felt-dark:#0D1A2E; --table-felt-light:#2C4D74; }
+body.table-red{ --table-felt:#5C1F1F; --table-felt-dark:#2E0F0F; --table-felt-light:#7A2C2C; }
+body.table-yellow{ --table-felt:#6B5A1F; --table-felt-dark:#3A2F0F; --table-felt-light:#8C7A2C; }
+body.table-orange{ --table-felt:#6B3A1F; --table-felt-dark:#3A1F0F; --table-felt-light:#8C4D2C; }
 
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;height:100%;}
@@ -112,6 +124,18 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .team-tag.team-a{background:rgba(127,179,168,.22); color:#A9D8CB;}
 .team-tag.team-b{background:rgba(201,123,90,.22); color:#E7A98A;}
 .partner-line{font-family:var(--font-body); font-size:13px; color:var(--cream-dim); text-align:center;}
+
+.color-swatch-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:2px; }
+.color-swatch{
+  width:38px; height:38px; border-radius:50%; padding:0; cursor:pointer;
+  border:2.5px solid rgba(244,239,230,.25);
+  box-shadow: 0 3px 0 rgba(0,0,0,.25), 0 5px 10px rgba(0,0,0,.3);
+  transition: transform .15s ease, border-color .15s ease;
+}
+.color-swatch:hover:not(.readonly){ transform: scale(1.1); }
+.color-swatch.active{ border-color: var(--brass-light); box-shadow: 0 0 0 3px rgba(230,199,90,.4), 0 3px 0 rgba(0,0,0,.25); }
+.color-swatch.readonly{ cursor:default; }
+.color-swatch.readonly:not(.active){ opacity:.6; }
 
 .field-group{display:flex; flex-direction:column; gap:8px; margin-bottom:16px; text-align:left;}
 .field-label{font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--brass-light);}
@@ -234,11 +258,16 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .opp-backs{display:flex; gap:3px;}
 .opp-backs .back{width:11px; height:18px; border-radius:2px; background: linear-gradient(135deg, var(--wood-light), var(--wood)); border:1px solid var(--wood-dark);}
 
-.board-outer{ flex:1; display:flex; position:relative; min-height:220px; }
+.board-outer{
+  flex:1; display:flex; position:relative; min-height:220px;
+  background: repeating-linear-gradient(100deg, var(--wood) 0 8px, var(--wood-light) 8px 10px, var(--wood-dark) 10px 16px);
+  border-radius:20px; padding:13px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.45), inset 0 0 0 2px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.08);
+}
 .board-wrap{
-  flex:1; background: radial-gradient(ellipse at 50% 30%, var(--felt-light) 0%, var(--felt) 60%);
-  border-radius:16px; border:1px solid rgba(0,0,0,.3); box-shadow: inset 0 0 50px rgba(0,0,0,.35);
-  overflow:auto; padding:20px 16px; min-height:220px; max-height:480px; position:relative;
+  flex:1; background: radial-gradient(ellipse at 50% 30%, var(--table-felt-light) 0%, var(--table-felt) 60%);
+  border-radius:12px; border:1px solid rgba(0,0,0,.35); box-shadow: inset 0 0 50px rgba(0,0,0,.4);
+  overflow:auto; padding:20px 16px; min-height:194px; max-height:480px; position:relative;
 }
 .table-canvas{ position:relative; margin:0 auto; }
 .empty-board-msg{
@@ -441,6 +470,19 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
           <button class="mode-tab" data-score="201">201</button>
         </div>
         <div class="lobby-hint" id="scoreHint"></div>
+      </div>
+
+      <div class="mode-select" id="colorSelectBlock">
+        <div class="field-label" style="text-align:center; margin-bottom:8px;">Table Color</div>
+        <div class="color-swatch-row" id="colorSwatchRow">
+          <button class="color-swatch" data-color="green" style="background:#1F3D2E;" title="Green"></button>
+          <button class="color-swatch" data-color="black" style="background:#1C1C1C;" title="Black"></button>
+          <button class="color-swatch" data-color="blue" style="background:#1A2F4D;" title="Blue"></button>
+          <button class="color-swatch" data-color="red" style="background:#5C1F1F;" title="Red"></button>
+          <button class="color-swatch" data-color="yellow" style="background:#6B5A1F;" title="Yellow"></button>
+          <button class="color-swatch" data-color="orange" style="background:#6B3A1F;" title="Orange"></button>
+        </div>
+        <div class="lobby-hint" id="colorHint"></div>
       </div>
 
       <div class="lobby-hint" id="lobbyHint"></div>
@@ -776,8 +818,16 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
   });
 
   /* ---------------- Screen routing ---------------- */
+  var TABLE_COLORS = ["green","black","blue","red","yellow","orange"];
+  function applyTableColor(){
+    var color = (room && TABLE_COLORS.indexOf(room.tableColor) > -1) ? room.tableColor : "green";
+    TABLE_COLORS.forEach(function(c){ document.body.classList.remove("table-" + c); });
+    document.body.classList.add("table-" + color);
+  }
+
   function showScreenForPhase(){
     closeBoneyardOverlay();
+    applyTableColor();
     ["screen-landing","screen-lobby","screen-game","screen-roundend","screen-matchend"].forEach(function(id){ $(id).classList.add("hidden"); });
     if(!room){ $("screen-landing").classList.remove("hidden"); updateRotatePrompt(); return; }
     if(room.phase === "lobby"){ $("screen-lobby").classList.remove("hidden"); renderLobby(); }
@@ -856,6 +906,18 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
       ? "First to " + room.targetScore + " points wins the match."
       : "Match length: first to " + room.targetScore + " points.";
 
+    // Table color
+    var colorButtons = $("colorSwatchRow").querySelectorAll(".color-swatch");
+    var currentColor = room.tableColor || "green";
+    colorButtons.forEach(function(btn){
+      var val = btn.getAttribute("data-color");
+      btn.classList.toggle("active", currentColor === val);
+      btn.classList.toggle("readonly", !isHost);
+    });
+    $("colorHint").textContent = isHost
+      ? "Pick a felt color for the table."
+      : "Table color: " + currentColor.charAt(0).toUpperCase() + currentColor.slice(1) + ".";
+
     var startBtn = $("startGameBtn");
     if(amHost()){
       startBtn.classList.remove("hidden");
@@ -880,6 +942,12 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
     btn.addEventListener("click", function(){
       if(!amHost() || !room) return;
       socket.emit("set_target_score", { targetScore: parseInt(btn.getAttribute("data-score"), 10) });
+    });
+  });
+  $("colorSwatchRow").querySelectorAll(".color-swatch").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      if(!amHost() || !room) return;
+      socket.emit("set_table_color", { tableColor: btn.getAttribute("data-color") });
     });
   });
 
