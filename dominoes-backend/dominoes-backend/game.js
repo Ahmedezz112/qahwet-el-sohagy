@@ -261,6 +261,69 @@ function endRoundByBlock(room) {
   checkMatchEnd(room);
 }
 
+/**
+ * Removes a player from the room because they chose to forfeit mid-game.
+ * This always ends the current round immediately rather than trying to
+ * splice them out of an in-progress turn rotation:
+ *  - Pairs mode can't sensibly continue with an uneven team (teams are
+ *    fixed by seat position), so the whole match ends there.
+ *  - Singles mode with fewer than 2 players left obviously can't continue
+ *    either, so the match ends there too.
+ *  - Otherwise (singles, 2+ players still remain), the round is scored
+ *    like a block — whoever among the REMAINING players holds the lowest
+ *    pip count wins the round and scores the difference — and the match
+ *    keeps going from there.
+ */
+function forfeitPlayer(room, idx) {
+  const leaving = room.players[idx];
+  if (!leaving) return;
+
+  const wasPairs = room.mode === "pairs";
+  room.players.splice(idx, 1);
+
+  if (room.hostId === leaving.id && room.players.length > 0) {
+    room.hostId = room.players[0].id;
+  }
+
+  if (wasPairs || room.players.length < 2) {
+    room.phase = "matchend";
+    room.matchResult = {
+      title: `${leaving.name} forfeited the match`,
+      reason: room.players.length >= 1
+        ? "The match couldn't continue with the players remaining, so it ended here."
+        : "Everyone else has left.",
+      winningTeam: null
+    };
+    return;
+  }
+
+  room.phase = "roundend";
+  const totals = room.players.map((p) => pipTotal(p.hand));
+  const minVal = Math.min(...totals);
+  const lowest = room.players.filter((p, i) => totals[i] === minVal);
+  if (lowest.length > 1) {
+    room.lastResult = {
+      title: `${leaving.name} forfeited`,
+      reason: "The round ended early. The remaining hands were tied, so no points were awarded this round.",
+      winnerName: null,
+      winningTeam: null
+    };
+    return;
+  }
+  const winner = lowest[0];
+  const others = room.players.filter((p) => p !== winner);
+  let pts = others.reduce((s, p) => s + pipTotal(p.hand), 0) - minVal;
+  pts = Math.max(0, pts);
+  winner.score += pts;
+  room.lastResult = {
+    title: `${leaving.name} forfeited — ${winner.name} wins the round`,
+    reason: `${winner.name} held the lowest pip count among the remaining players and scores the difference.`,
+    winnerName: winner.name,
+    winningTeam: null
+  };
+  checkMatchEnd(room);
+}
+
 /** Returns { error } on failure, or { ok:true } on success (mutates room). */
 function playTile(room, idx, tileId, side) {
   const hand = room.players[idx].hand;
@@ -346,5 +409,6 @@ module.exports = {
   checkMatchEnd,
   dealAndStart,
   playTile,
-  drawOneTile
+  drawOneTile,
+  forfeitPlayer
 };
