@@ -288,29 +288,44 @@ function playTile(room, idx, tileId, side) {
   return { ok: true };
 }
 
-/** Draw-game rule: keep drawing until a playable tile turns up, or the boneyard runs out. */
-function drawOrPass(room, idx) {
-  const hand = room.players[idx].hand;
+/**
+ * Draw-game rule, one tile at a time: draws a single tile from the
+ * boneyard and adds it to the player's hand.
+ *  - If it's playable, it's locked in as the forced next play (the turn
+ *    does not advance — the player must play this exact tile).
+ *  - If it's NOT playable and the boneyard still has tiles left, the turn
+ *    stays with this same player — they're expected to call this again to
+ *    draw another tile.
+ *  - If it's not playable and that was the last tile in the boneyard (or
+ *    the boneyard was already empty), this counts as a pass and the turn
+ *    moves on (or the round ends if everyone's now passed in a row).
+ * Returns { drewTileId, mustDrawAgain } so the caller can decide whether
+ * to prompt for another draw.
+ */
+function drawOneTile(room, idx) {
+  if (room.boneyard.length === 0) {
+    room.passesInRow++;
+    if (room.passesInRow >= room.players.length) endRoundByBlock(room);
+    else room.currentIdx = (room.currentIdx + 1) % room.players.length;
+    return { drewTileId: null, mustDrawAgain: false };
+  }
+
+  const tile = room.boneyard.pop();
+  room.players[idx].hand.push(tile);
+
+  if (tilePlayability(room, tile).any) {
+    room.forcedTileId = tile.id;
+    return { drewTileId: tile.id, mustDrawAgain: false };
+  }
 
   if (room.boneyard.length === 0) {
     room.passesInRow++;
     if (room.passesInRow >= room.players.length) endRoundByBlock(room);
     else room.currentIdx = (room.currentIdx + 1) % room.players.length;
-    return;
+    return { drewTileId: tile.id, mustDrawAgain: false };
   }
 
-  while (room.boneyard.length > 0) {
-    const tile = room.boneyard.pop();
-    hand.push(tile);
-    if (tilePlayability(room, tile).any) {
-      room.forcedTileId = tile.id;
-      return;
-    }
-  }
-
-  room.passesInRow++;
-  if (room.passesInRow >= room.players.length) endRoundByBlock(room);
-  else room.currentIdx = (room.currentIdx + 1) % room.players.length;
+  return { drewTileId: tile.id, mustDrawAgain: true };
 }
 
 module.exports = {
@@ -326,5 +341,5 @@ module.exports = {
   checkMatchEnd,
   dealAndStart,
   playTile,
-  drawOrPass
+  drawOneTile
 };
