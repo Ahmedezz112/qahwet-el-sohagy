@@ -116,9 +116,18 @@ function dealAndStart(room) {
   if (!VALID_TARGET_SCORES.includes(room.targetScore)) {
     room.targetScore = 101;
   }
-  const deck = shuffle(buildDeck());
-  const tilesEach =
-    room.mode === "pairs" ? 7 : room.players.length === 2 ? 7 : 5;
+  // Traditional 3-handed variant: pull the double-blank out of the set so
+  // the remaining 27 tiles split evenly into three 9-tile hands with no
+  // boneyard left over.
+  const isThreeHanded = room.mode !== "pairs" && room.players.length === 3;
+  room.excludedDouble = isThreeHanded;
+
+  let deck = shuffle(buildDeck());
+  if (isThreeHanded) {
+    deck = deck.filter((t) => !(t.a === 0 && t.b === 0));
+  }
+
+  const tilesEach = room.mode === "pairs" ? 7 : room.players.length === 2 ? 7 : isThreeHanded ? 9 : 5;
   room.players.forEach((p) => {
     p.hand = deck.splice(0, tilesEach);
   });
