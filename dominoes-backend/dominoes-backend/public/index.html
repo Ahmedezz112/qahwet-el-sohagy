@@ -85,6 +85,8 @@ button:active{transform:scale(.97);}
 }
 .btn-ghost:hover{border-color:var(--brass-light); color:var(--brass-light);}
 .btn-small{padding:9px 16px; font-size:13px; border-radius:8px;}
+.btn-danger{ border-color: rgba(200,75,60,.45); color:#FFB4A8; }
+.btn-danger:hover{ border-color: var(--danger); color: var(--danger); background: rgba(200,75,60,.1); }
 
 input[type="text"]{
   background: rgba(244,239,230,.08); border:1.5px solid rgba(244,239,230,.22); border-radius:8px;
@@ -375,6 +377,7 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
   .topbar .brand h1{ font-size:16px; }
   .eyebrow{ font-size:9px; }
   .boneyard-pill, .room-pill{ padding:5px 10px; font-size:11px; }
+  #forfeitBtn{ padding:5px 12px; font-size:11px; }
   .turn-banner{ padding:6px 14px; font-size:14px; }
   .opponents-row{ gap:6px; }
   .opp-card{ min-width:90px; padding:6px 8px; gap:3px; }
@@ -504,6 +507,7 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
         <div class="topbar-right">
           <div class="room-pill" id="roomPillCode"></div>
           <div class="boneyard-pill"><span class="tileback-icon"></span><span id="boneyardCount">0</span><span>&nbsp;in boneyard</span></div>
+          <button class="btn-ghost btn-small btn-danger" id="forfeitBtn">Forfeit</button>
         </div>
       </div>
       <div class="turn-banner" id="turnBanner"></div>
@@ -986,6 +990,17 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
   $("leaveLobbyBtn").addEventListener("click", exitToHome);
   $("exitFromRoundEndBtn").addEventListener("click", exitToHome);
   $("exitFromMatchEndBtn").addEventListener("click", exitToHome);
+
+  $("forfeitBtn").addEventListener("click", function(){
+    if(!room) return;
+    var ok = confirm("Forfeit this match? You'll leave immediately and the other players will continue without you. This can't be undone.");
+    if(!ok) return;
+    socket.emit("forfeit", {}, function(){
+      clearSession();
+      room = null;
+      showScreenForPhase();
+    });
+  });
 
   $("startGameBtn").addEventListener("click", function(){
     socket.emit("start_game");
