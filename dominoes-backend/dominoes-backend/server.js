@@ -33,6 +33,7 @@ function viewForPlayer(room, playerId) {
     phase: room.phase,
     mode: room.mode,
     targetScore: room.targetScore,
+    tableColor: room.tableColor,
     hostId: room.hostId,
     round: room.round,
     board: room.board,
@@ -92,6 +93,7 @@ io.on("connection", (socket) => {
       phase: "lobby",
       mode: "singles",
       targetScore: 101,
+      tableColor: "green",
       hostId: playerId,
       round: 1,
       players: [
@@ -172,6 +174,15 @@ io.on("connection", (socket) => {
     if (room.hostId !== socket.data.playerId) return;
     if (!game.VALID_TARGET_SCORES.includes(targetScore)) return;
     room.targetScore = targetScore;
+    broadcastRoom(room);
+  });
+
+  socket.on("set_table_color", ({ tableColor }) => {
+    const room = currentRoom(socket);
+    if (!room || room.phase !== "lobby") return;
+    if (room.hostId !== socket.data.playerId) return;
+    if (!game.VALID_TABLE_COLORS.includes(tableColor)) return;
+    room.tableColor = tableColor;
     broadcastRoom(room);
   });
 
