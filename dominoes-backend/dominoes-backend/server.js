@@ -11,6 +11,16 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Last-resort safety net: a single bad event, a malformed client payload, or
+// an edge-case bug should never be allowed to crash the whole process and
+// wipe every active game for every connected player. Log it and keep going.
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException] server stayed up:", err);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("[unhandledRejection] server stayed up:", err);
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 /** code -> room object (kept entirely in memory — resets if the server restarts) */
@@ -81,9 +91,31 @@ function enforceModeValidity(room) {
   }
 }
 
+/**
+ * Wraps a socket event handler so a thrown error (bad payload, an edge
+ * case in game logic, anything) can never crash the server. It's caught,
+ * logged, and — if the client provided an ack callback — they get a
+ * graceful failure response instead of the connection just going silent.
+ */
+function safeOn(socket, event, handler) {
+  socket.on(event, (...args) => {
+    try {
+      handler(...args);
+    } catch (err) {
+      console.error(`[socket handler error] event="${event}":`, err);
+      const maybeCb = args[args.length - 1];
+      if (typeof maybeCb === "function") {
+        try { maybeCb({ ok: false, error: "Something went wrong on the server. Please try again." }); } catch (_) {}
+      } else {
+        try { io.to(socket.id).emit("action_error", "Something went wrong — please try again."); } catch (_) {}
+      }
+    }
+  });
+}
+
 io.on("connection", (socket) => {
-  socket.on("create_room", ({ name }, cb) => {
-    name = String(name || "").trim().slice(0, 14) || "Player";
+  safeOn(socket, "create_room", (payload, cb) => {
+    const name = String((payload && payload.name) || "").trim().slice(0, 14) || "Player";
     const code = newRoomCode();
     const playerId = crypto.randomUUID();
     const token = randomToken();
@@ -117,14 +149,14 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("join_room", ({ code, name }, cb) => {
-    code = String(code || "").trim().toUpperCase();
+  safeOn(socket, "join_room", (payload, cb) => {
+    const code = String((payload && payload.code) || "").trim().toUpperCase();
     const room = rooms[code];
     if (!room) return cb({ ok: false, error: "No room found with that code." });
     if (room.phase !== "lobby") return cb({ ok: false, error: "That game has already started." });
     if (room.players.length >= 4) return cb({ ok: false, error: "That room already has 4 players." });
 
-    name = String(name || "").trim().slice(0, 14) || "Player";
+    const name = String((payload && payload.name) || "").trim().slice(0, 14) || "Player";
     const playerId = crypto.randomUUID();
     const token = randomToken();
     room.players.push({
@@ -139,8 +171,10 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("rejoin", ({ code, playerId, token }, cb) => {
-    code = String(code || "").trim().toUpperCase();
+  safeOn(socket, "rejoin", (payload, cb) => {
+    const code = String((payload && payload.code) || "").trim().toUpperCase();
+    const playerId = payload && payload.playerId;
+    const token = payload && payload.token;
     const room = rooms[code];
     if (!room) return cb({ ok: false, error: "That room no longer exists." });
     const player = room.players.find((p) => p.id === playerId && p.token === token);
@@ -155,7 +189,8 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("set_mode", ({ mode }) => {
+  safeOn(socket, "set_mode", (payload) => {
+    const mode = payload && payload.mode;
     const room = currentRoom(socket);
     if (!room || room.phase !== "lobby") return;
     if (room.hostId !== socket.data.playerId) return;
@@ -168,7 +203,8 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("set_target_score", ({ targetScore }) => {
+  safeOn(socket, "set_target_score", (payload) => {
+    const targetScore = payload && payload.targetScore;
     const room = currentRoom(socket);
     if (!room || room.phase !== "lobby") return;
     if (room.hostId !== socket.data.playerId) return;
@@ -177,7 +213,8 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("set_table_color", ({ tableColor }) => {
+  safeOn(socket, "set_table_color", (payload) => {
+    const tableColor = payload && payload.tableColor;
     const room = currentRoom(socket);
     if (!room || room.phase !== "lobby") return;
     if (room.hostId !== socket.data.playerId) return;
@@ -186,7 +223,7 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("start_game", () => {
+  safeOn(socket, "start_game", () => {
     const room = currentRoom(socket);
     if (!room) return;
     if (room.hostId !== socket.data.playerId) return;
@@ -199,7 +236,9 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("play_tile", ({ tileId, side }) => {
+  safeOn(socket, "play_tile", (payload) => {
+    const tileId = payload && payload.tileId;
+    const side = payload && payload.side;
     const room = currentRoom(socket);
     if (!room || room.phase !== "playing") return;
     const idx = currentPlayerIdx(socket, room);
@@ -213,7 +252,7 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("draw_one", () => {
+  safeOn(socket, "draw_one", () => {
     const room = currentRoom(socket);
     if (!room || room.phase !== "playing") return;
     const idx = currentPlayerIdx(socket, room);
@@ -226,7 +265,7 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("next_round", () => {
+  safeOn(socket, "next_round", () => {
     const room = currentRoom(socket);
     if (!room || room.phase !== "roundend") return;
     if (room.hostId !== socket.data.playerId) return;
@@ -235,7 +274,7 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("new_match", () => {
+  safeOn(socket, "new_match", () => {
     const room = currentRoom(socket);
     if (!room || room.phase !== "roundend") return;
     if (room.hostId !== socket.data.playerId) return;
@@ -245,7 +284,7 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("play_again", () => {
+  safeOn(socket, "play_again", () => {
     const room = currentRoom(socket);
     if (!room || room.phase !== "matchend") return;
     if (room.hostId !== socket.data.playerId) return;
@@ -257,7 +296,7 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("leave_room", () => {
+  safeOn(socket, "leave_room", () => {
     const room = currentRoom(socket);
     if (!room) return;
     const idx = currentPlayerIdx(socket, room);
@@ -283,7 +322,7 @@ io.on("connection", (socket) => {
     socket.data.playerId = null;
   });
 
-  socket.on("disconnect", () => {
+  safeOn(socket, "disconnect", () => {
     const room = currentRoom(socket);
     if (!room) return;
     const player = room.players.find((p) => p.socketId === socket.id);
@@ -297,17 +336,21 @@ io.on("connection", (socket) => {
 
 // Periodic cleanup: drop empty / long-abandoned rooms so memory doesn't grow forever.
 setInterval(() => {
-  const now = Date.now();
-  Object.keys(rooms).forEach((code) => {
-    const room = rooms[code];
-    const anyoneConnected = room.players.some((p) => p.connected);
-    if (!anyoneConnected) {
-      room._emptySince = room._emptySince || now;
-      if (now - room._emptySince > 30 * 60 * 1000) delete rooms[code];
-    } else {
-      room._emptySince = null;
-    }
-  });
+  try {
+    const now = Date.now();
+    Object.keys(rooms).forEach((code) => {
+      const room = rooms[code];
+      const anyoneConnected = room.players.some((p) => p.connected);
+      if (!anyoneConnected) {
+        room._emptySince = room._emptySince || now;
+        if (now - room._emptySince > 30 * 60 * 1000) delete rooms[code];
+      } else {
+        room._emptySince = null;
+      }
+    });
+  } catch (err) {
+    console.error("[cleanup interval error]:", err);
+  }
 }, 5 * 60 * 1000);
 
 const PORT = process.env.PORT || 3001;
