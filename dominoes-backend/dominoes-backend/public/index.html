@@ -141,6 +141,10 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .field-label{font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--brass-light);}
 .code-input{text-transform:uppercase; letter-spacing:.25em; font-family:var(--font-mono); font-size:20px; text-align:center;}
 .error-msg{color:#FFB4A8; font-size:13px; margin-top:-4px; margin-bottom:10px; min-height:1px;}
+.session-lost-msg{
+  background: rgba(200,75,60,.15); border:1px solid rgba(200,75,60,.35); border-radius:10px;
+  padding:11px 14px; font-size:13px; color:#FFCFC5; margin-bottom:18px; text-align:left;
+}
 
 #screen-lobby{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:20px;}
 .room-code-display{display:flex; flex-direction:column; align-items:center; gap:10px;}
@@ -377,10 +381,11 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
   .opp-name{ font-size:11px; }
   .opp-score{ font-size:10px; }
   .opp-backs .back{ width:8px; height:13px; }
-  .board-outer{ min-height:120px; }
-  .board-wrap{ min-height:120px; max-height:34vh; padding:10px 10px; }
-  .boneyard-center-pile .pile-stack{ width:42px; height:74px; }
-  .boneyard-center-pile .pile-label{ font-size:9px; padding:4px 9px; }
+  .board-outer{ min-height:120px; padding:6px; border-radius:14px; }
+  .board-wrap{ min-height:108px; max-height:34vh; padding:6px 8px; border-radius:10px; }
+  .boneyard-center-pile{ bottom:6px; gap:4px; }
+  .boneyard-center-pile .pile-stack{ width:36px; height:64px; }
+  .boneyard-center-pile .pile-label{ font-size:9px; padding:3px 8px; }
   .hand-area{ gap:5px; }
   .hand-status{ gap:6px; }
   .hand-status .who{ font-size:13px; }
@@ -405,6 +410,7 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
 
     <div id="screen-landing">
       <div class="card">
+        <div class="session-lost-msg hidden" id="sessionLostMsg"></div>
         <div class="eyebrow">Play From Anywhere · Draw Rules</div>
         <div class="title-row">
           <h1 lang="ar" class="brand-ar">قهوة السوهاجي</h1>
@@ -763,7 +769,16 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
     var session = loadSession();
     if(session){
       socket.emit("rejoin", session, function(res){
-        if(!res.ok){ clearSession(); }
+        if(!res.ok){
+          clearSession();
+          room = null;
+          showScreenForPhase();
+          var msgEl = $("sessionLostMsg");
+          if(msgEl){
+            msgEl.textContent = "Your previous game session ended (" + (res.error || "the room is no longer available") + "). Create or join a new room below.";
+            msgEl.classList.remove("hidden");
+          }
+        }
       });
     }
   });
@@ -802,6 +817,7 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
     socket.emit("create_room", { name: name }, function(res){
       if(!res.ok){ $("createError").textContent = res.error || "Couldn't create a room."; return; }
       saveSession({ code: res.code, playerId: res.playerId, token: res.token });
+      $("sessionLostMsg").classList.add("hidden");
     });
   });
 
@@ -814,6 +830,7 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
     socket.emit("join_room", { code: code, name: name }, function(res){
       if(!res.ok){ $("joinError").textContent = res.error || "Couldn't join that room."; return; }
       saveSession({ code: res.code, playerId: res.playerId, token: res.token });
+      $("sessionLostMsg").classList.add("hidden");
     });
   });
 
@@ -963,6 +980,7 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
     clearSession();
     room = null;
     showScreenForPhase();
+    $("sessionLostMsg").classList.add("hidden");
   }
 
   $("leaveLobbyBtn").addEventListener("click", exitToHome);
