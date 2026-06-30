@@ -65,6 +65,7 @@ function teamOf(idx) {
 }
 
 const VALID_TARGET_SCORES = [51, 101, 151, 201];
+const VALID_TABLE_COLORS = ["green", "black", "blue", "red", "yellow", "orange"];
 
 /**
  * Call right after a round's scores have been applied. If anyone (or,
@@ -115,6 +116,9 @@ function dealAndStart(room) {
   }
   if (!VALID_TARGET_SCORES.includes(room.targetScore)) {
     room.targetScore = 101;
+  }
+  if (!VALID_TABLE_COLORS.includes(room.tableColor)) {
+    room.tableColor = "green";
   }
   // Traditional 3-handed variant: pull the double-blank out of the set so
   // the remaining 27 tiles split evenly into three 9-tile hands with no
@@ -338,6 +342,7 @@ module.exports = {
   findStartingPlayer,
   teamOf,
   VALID_TARGET_SCORES,
+  VALID_TABLE_COLORS,
   checkMatchEnd,
   dealAndStart,
   playTile,
