@@ -194,7 +194,7 @@ input[type="text"]::placeholder{color:rgba(244,239,230,.4);}
 .boneyard-tile-back.revealed .tile-div{ height:3px; width:82%; align-self:center; background:rgba(0,0,0,.28); border-radius:2px; }
 
 .boneyard-center-pile{
-  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  position:absolute; bottom:14px; left:50%; transform:translateX(-50%); top:auto;
   z-index:6; display:flex; flex-direction:column; align-items:center; gap:8px;
   cursor:pointer; pointer-events:auto;
 }
@@ -561,15 +561,16 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
   }
 
   /**
-   * Lays the board chain out like a real domino table: tiles run horizontally
-   * until they'd run off the edge of the table, at which point that tile is
-   * drawn vertically instead and the chain continues in the opposite
-   * direction one row down (a "snake" layout). Doubles also get drawn
-   * perpendicular to the chain wherever they fall — the classic "spinner"
-   * look — without forcing a row change unless they happen to land at the
-   * true edge too.
+   * Lays the board chain out like a real domino table. Short chains (the
+   * common case) are centered as a single row in the middle of the table,
+   * growing outward from there. Once a chain is too long to fit on one row,
+   * this falls back to the proven "snake" layout: tiles run horizontally
+   * until they'd run off the table edge, that tile turns vertical, and the
+   * chain continues one row down in the opposite direction. Doubles are
+   * always drawn perpendicular to the chain wherever they land — the
+   * classic "spinner" look.
    */
-  function layoutBoardSnake(board, canvasWidth, scale){
+  function layoutBoardSnake(board, canvasWidth, scale, availableHeight){
     scale = scale || 1;
     var unit = 100 * scale;       // long tile dimension at this scale
     var half = unit / 2;          // short tile dimension
@@ -577,6 +578,53 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
     var rowGap = unit * (184/120);
     var tileLong = unit * (124/120);
     var spinnerStep = unit * (64/120);
+
+    if(board.length === 0){
+      return { placements: [], startAnchor: { x: canvasWidth/2, y: (availableHeight||180)/2 }, endAnchor: { x: canvasWidth/2, y: (availableHeight||180)/2 }, canvasHeight: availableHeight || 180, unit: unit, half: half };
+    }
+
+    // ---- Fast path: does the whole chain fit comfortably in one row? ----
+    // (Approximate width — close enough to decide fit and to center it;
+    // the actual per-tile placement below uses the exact same stride
+    // constants as the proven multi-row layout, so spacing stays correct.)
+    var approxWidth = 0;
+    board.forEach(function(bt){ approxWidth += (bt.left === bt.right) ? spinnerStep : tileLong; });
+    var available = canvasWidth - 2 * margin;
+
+    if(approxWidth <= available){
+      var startX = margin + Math.max(0, (available - approxWidth) / 2);
+      var rowHeight = unit;
+      var startY = (availableHeight && availableHeight > rowHeight)
+        ? availableHeight / 2
+        : rowHeight / 2 + margin * 0.4;
+
+      var cursorX = startX;
+      var placements = [];
+      board.forEach(function(bt){
+        var isDouble = bt.left === bt.right;
+        if(isDouble){
+          placements.push({ bt: bt, orientation: "v", left: cursorX, top: startY - half, modeAtPlacement: "right", isTurn: false, dispLeft: bt.left, dispRight: bt.right });
+          cursorX += spinnerStep;
+        } else {
+          placements.push({ bt: bt, orientation: "h", left: cursorX, top: startY - half/2, modeAtPlacement: "right", isTurn: false, dispLeft: bt.left, dispRight: bt.right });
+          cursorX += tileLong;
+        }
+      });
+
+      var firstP = placements[0];
+      var startAnchor = { x: firstP.left, y: firstP.top + (firstP.orientation === "v" ? half : half/2) };
+      var lastP = placements[placements.length - 1];
+      var endAnchor = (lastP.orientation === "h")
+        ? { x: lastP.left + unit, y: lastP.top + half/2 }
+        : { x: lastP.left + half, y: lastP.top + half };
+
+      var contentBottom = startY + rowHeight/2 + margin * 0.4;
+      var canvasHeight = Math.max(contentBottom, availableHeight || 0);
+
+      return { placements: placements, startAnchor: startAnchor, endAnchor: endAnchor, canvasHeight: canvasHeight, unit: unit, half: half };
+    }
+
+    // ---- Fallback: chain is too long for one row — snake it across rows ----
     var cursorX = margin;
     var rowCenterY = (50 * scale);
     var mode = "right";
@@ -910,7 +958,7 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
     var boardRow = $("boardRow"); boardRow.innerHTML = "";
     if(room.board.length === 0){
       boardRow.style.width = "100%";
-      boardRow.style.height = "180px";
+      boardRow.style.height = Math.max($("boardWrap").clientHeight - 16, 180) + "px";
       boardRow.appendChild(el("div","empty-board-msg","The table is empty — first tile played can land anywhere."));
     } else {
       var hand = room.players[myIdx].hand || [];
@@ -919,8 +967,9 @@ body.show-rotate-prompt .rotate-prompt{ display:flex; }
       var rightActionable = mine && selTile && tilePlayability(selTile).right;
 
       var canvasWidth = Math.max($("boardWrap").clientWidth - 32, 280);
+      var canvasAvailHeight = Math.max($("boardWrap").clientHeight - 16, 0);
       var scale = canvasWidth >= 400 ? 1 : Math.max(0.55, canvasWidth / 400);
-      var layout = layoutBoardSnake(room.board, canvasWidth, scale);
+      var layout = layoutBoardSnake(room.board, canvasWidth, scale, canvasAvailHeight);
 
       boardRow.style.width = canvasWidth + "px";
       boardRow.style.height = layout.canvasHeight + "px";
